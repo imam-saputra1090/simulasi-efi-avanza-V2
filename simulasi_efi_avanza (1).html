@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Simulasi Interaktif 3D EFI — Toyota Avanza (Prototype)</title>
+  <style>
+    :root{--bg:#071426;--panel:#0f1724;--muted:#9aa4b2;--accent:#ffb86b}
+    html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial;color:#eaf4ff;background:linear-gradient(180deg,#071022,#081426)}
+    .wrap{display:flex;gap:12px;max-width:1320px;margin:14px auto;padding:12px}
+    .viewport{flex:1;border-radius:12px;overflow:hidden;background:linear-gradient(180deg,#081426,#061020);box-shadow:0 12px 30px rgba(0,0,0,0.6);position:relative}
+    .sidebar{width:360px;flex-shrink:0}
+    .card{background:var(--panel);padding:12px;border-radius:10px;color:var(--muted);box-shadow:0 8px 30px rgba(0,0,0,0.6)}
+    h1{margin:0 0 8px 0;color:#dff6ff;font-size:18px}
+    .controls{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+    button{background:linear-gradient(180deg,#14202a,#0b1220);color:#fff;border:0;padding:8px 10px;border-radius:8px;cursor:pointer}
+    button.secondary{background:transparent;border:1px solid rgba(255,255,255,0.04);color:var(--muted)}
+    .caption{background:rgba(255,255,255,0.02);padding:8px;border-radius:8px;margin-top:8px;color:#cfe9ff}
+    .small{font-size:13px;color:var(--muted)}
+    .row{display:flex;gap:6px;align-items:center}
+    .label{font-size:13px;color:#dfeeff}
+    input[type=range]{width:100%}
+    .statusBox{background:rgba(255,255,255,0.02);padding:8px;border-radius:8px;margin-top:8px}
+    .gauge{font-weight:700;color:#ffd86b}
+    .footer{font-size:12px;color:var(--muted);text-align:center;margin-top:8px}
+    @media (max-width:980px){.wrap{flex-direction:column}.sidebar{width:100%}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="viewport" id="view">
+      <div id="overlay" style="position:absolute;left:18px;top:18px;z-index:5;color:#dff6ff;font-weight:700">Simulasi EFI — Toyota Avanza (Interaktif)</div>
+      <div id="hintBox" style="position:absolute;right:18px;top:18px;z-index:5;max-width:320px;background:rgba(0,0,0,0.5);padding:10px;border-radius:8px;color:#eaf4ff;font-size:13px">Klik bagian pada model untuk melihat nama & fungsi komponen.</div>
+      <div id="captionOverlay" style="position:absolute;left:18px;bottom:18px;z-index:5;max-width:70%;background:rgba(0,0,0,0.45);padding:8px;border-radius:6px;color:#eaf4ff">Caption: Siap</div>
+    </div>
+
+    <div class="sidebar">
+      <div class="card">
+        <h1>Kontrol & Parameter EFI</h1>
+        <div class="controls">
+          <button id="btnStart">Start Engine ▶</button>
+          <button id="btnStop" class="secondary">Stop ⏹</button>
+          <button id="btnStep" class="secondary">Langkah →</button>
+          <button id="btnReset" class="secondary">Reset ⟲</button>
+        </div>
+
+        <div class="statusBox">Status: <span id="statusText" class="gauge">OFF</span></div>
+
+        <div style="margin-top:12px">
+          <div class="label">TPS — Posisi Throttle (°)</div>
+          <div class="row"><input id="tps" type="range" min="0" max="90" value="8"><div id="tpsVal" class="small">8°</div></div>
+        </div>
+
+        <div style="margin-top:10px">
+          <div class="label">MAF — Simulasi Aliran Udara (arb)</div>
+          <div class="row"><input id="maf" type="range" min="20" max="200" value="80"><div id="mafVal" class="small">80</div></div>
+        </div>
+
+        <div style="margin-top:10px">
+          <div class="label">ECT — Suhu Mesin (°C)</div>
+          <div class="row"><input id="ect" type="range" min="10" max="110" value="30"><div id="ectVal" class="small">30°C</div></div>
+        </div>
+
+        <div style="margin-top:10px">
+          <div class="label">O2 Sensor (Closed-loop)</div>
+          <div class="row"><label class="small"><input type="checkbox" id="o2toggle"> Aktif</label><div style="flex:1"></div><div id="afrVal" class="small gauge">AFR ~ 14.7</div></div>
+        </div>
+
+        <div style="margin-top:12px">
+          <div class="label">Kontrol Injector (Manual)</div>
+          <div class="row"><button id="inj1" class="secondary">Injector 1</button><button id="inj2" class="secondary">Injector 2</button><button id="inj3" class="secondary">Injector 3</button></div>
+        </div>
+
+        <div style="margin-top:12px">
+          <div class="label">Log / Penjelasan</div>
+          <div id="log" class="small" style="height:160px;overflow:auto;background:rgba(255,255,255,0.02);padding:8px;border-radius:6px"></div>
+        </div>
+
+        <div style="margin-top:10px;display:flex;gap:8px;align-items:center">
+          <button id="downloadHtml" class="secondary">Download HTML</button>
+          <button id="exportSnapshot" class="secondary">Snapshot PNG</button>
+        </div>
+
+        <div class="footer">Tekan tombol Start untuk menjalankan simulasi. Klik tiap komponen di viewport untuk hint dan fungsi.</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // three.js prototype with interactivity and EFI parameter simulation
+    (function(){
+      const s1 = document.createElement('script'); s1.src='https://unpkg.com/three@0.155.0/build/three.min.js'; s1.onload=loadControls; document.head.appendChild(s1);
+      function loadControls(){ const s2=document.createElement('script'); s2.src='https://unpkg.com/three@0.155.0/examples/js/controls/OrbitControls.js'; s2.onload=init; document.head.appendChild(s2); }
+
+      function init(){
+        const THREE = window.THREE; const view = document.getElementById('view');
+        const renderer = new THREE.WebGLRenderer({antialias:true}); renderer.setPixelRatio(window.devicePixelRatio); renderer.setSize(view.clientWidth, view.clientHeight); renderer.setClearColor(0x071426,1); view.appendChild(renderer.domElement);
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(45, view.clientWidth/view.clientHeight, 0.1, 2000); camera.position.set(0,120,320);
+        const controls = new THREE.OrbitControls(camera, renderer.domElement); controls.enableDamping=true; controls.dampingFactor=0.08; controls.minDistance=60; controls.maxDistance=800;
+
+        // lights
+        scene.add(new THREE.HemisphereLight(0xbfdfff, 0x101020, 0.85)); const dir=new THREE.DirectionalLight(0xffffff,0.6); dir.position.set(120,200,100); scene.add(dir);
+        const ground = new THREE.Mesh(new THREE.PlaneGeometry(1200,1200), new THREE.MeshStandardMaterial({color:0x061022,metalness:0.1,roughness:0.9})); ground.rotation.x=-Math.PI/2; ground.position.y=-120; scene.add(ground);
+
+        // Materials
+        const metalM = new THREE.MeshStandardMaterial({color:0x4d6b7a,metalness:0.6,roughness:0.3});
+        const plastM = new THREE.MeshStandardMaterial({color:0x2b3a4a,metalness:0.1,roughness:0.6});
+        const fuelM = new THREE.MeshStandardMaterial({color:0xffa05a,emissive:0x442200,metalness:0.2,roughness:0.6});
+        const greenM = new THREE.MeshStandardMaterial({color:0x17c26d,metalness:0.2,roughness:0.5});
+        const sparkMat = new THREE.MeshStandardMaterial({color:0xffd86b,emissive:0xffd86b,emissiveIntensity:0});
+
+        // assembly
+        const group = new THREE.Group(); scene.add(group);
+        const engine = new THREE.Mesh(new THREE.BoxGeometry(160,90,120), new THREE.MeshStandardMaterial({color:0x6b5f87,metalness:0.2,roughness:0.45})); engine.position.set(0,0,0); group.add(engine);
+        const intake = new THREE.Mesh(new THREE.CylinderGeometry(28,28,220,24), new THREE.MeshStandardMaterial({color:0x8fb8ff,metalness:0.1,roughness:0.6})); intake.rotation.z=Math.PI/2; intake.position.set(220,10,40); group.add(intake);
+        const airFilter = new THREE.Mesh(new THREE.CylinderGeometry(40,60,60,18), new THREE.MeshStandardMaterial({color:0x9fc7ff,metalness:0.05,roughness:0.7})); airFilter.position.set(320,10,40); group.add(airFilter);
+        const tank = new THREE.Mesh(new THREE.BoxGeometry(120,70,80), plastM); tank.position.set(-220,-10,60); group.add(tank);
+
+        // pump
+        const pump = new THREE.Group(); const pumpBody = new THREE.Mesh(new THREE.CylinderGeometry(16,16,48,18), metalM); pumpBody.rotation.x=Math.PI/2; pump.add(pumpBody); const pumpRotor = new THREE.Mesh(new THREE.CircleGeometry(14,18), fuelM); pumpRotor.rotation.x=Math.PI/2; pumpRotor.position.z=2; pump.add(pumpRotor); pump.position.set(-160,-10,60); group.add(pump);
+
+        // rail + injectors
+        const rail = new THREE.Mesh(new THREE.BoxGeometry(220,18,14), new THREE.MeshStandardMaterial({color:0x22323f,metalness:0.5,roughness:0.4})); rail.position.set(20,30,70); group.add(rail);
+        const injectors=[]; const injPositions=[-80,0,80]; injPositions.forEach((x,i)=>{ const inj=new THREE.Mesh(new THREE.BoxGeometry(14,30,18), greenM); inj.position.set(x,10,70); inj.userData = {id:i+1}; group.add(inj); injectors.push(inj); });
+
+        // throttle
+        const throttle = new THREE.Mesh(new THREE.BoxGeometry(6,60,6), new THREE.MeshStandardMaterial({color:0xffd28a})); throttle.position.set(240,0,40); throttle.rotation.z=0; group.add(throttle);
+
+        // ECU
+        const ecu = new THREE.Mesh(new THREE.BoxGeometry(60,36,36), new THREE.MeshStandardMaterial({color:0x274b36,metalness:0.2,roughness:0.6})); ecu.position.set(-240,60,-40); group.add(ecu);
+
+        // spark
+        const sparkMesh = new THREE.Mesh(new THREE.SphereGeometry(6,12,8), sparkMat); sparkMesh.position.set(0,40,0); group.add(sparkMesh);
+
+        // labels (sprites)
+        function makeLabel(t){ const c=document.createElement('canvas'); c.width=256; c.height=64; const ctx=c.getContext('2d'); ctx.fillStyle='rgba(6,14,22,0.6)'; ctx.fillRect(0,0,256,64); ctx.fillStyle='#e6f7ff'; ctx.font='20px sans-serif'; ctx.fillText(t,12,36); const tex=new THREE.CanvasTexture(c); const mat=new THREE.SpriteMaterial({map:tex}); const sp=new THREE.Sprite(mat); sp.scale.set(120,32,1); return sp; }
+        const lblPump=makeLabel('Fuel Pump'); lblPump.position.copy(pump.position).add(new THREE.Vector3(0,48,0)); scene.add(lblPump);
+        const lblRail=makeLabel('Fuel Rail'); lblRail.position.copy(rail.position).add(new THREE.Vector3(0,56,0)); scene.add(lblRail);
+
+        // raycaster
+        const ray = new THREE.Raycaster(); const pointer=new THREE.Vector2();
+        function onPointer(e){ const rect=renderer.domElement.getBoundingClientRect(); pointer.x=((e.clientX-rect.left)/rect.width)*2-1; pointer.y=-((e.clientY-rect.top)/rect.height)*2+1; ray.setFromCamera(pointer,camera); const all=[pumpBody,pumpRotor, ...injectors, throttle, ecu, sparkMesh, tank, airFilter, rail]; const hits=ray.intersectObjects(all); if(hits.length){ const obj=hits[0].object; handleClick(obj); } }
+        renderer.domElement.addEventListener('pointerdown', onPointer);
+
+        function handleClick(obj){ if(obj===pumpBody||obj===pumpRotor) showHint('Fuel Pump','Pompa menyuplai bahan bakar dari tangki ke fuel rail; dikendalikan oleh ECU (relay).'); else if(injectors.includes(obj)) showHint(`Injector ${obj.userData.id}`,'Menyemprotkan bahan bakar terukur (pulse width) ke intake per silinder.'); else if(obj===throttle) showHint('Throttle Body (TPS)','Mengatur aliran udara; sensor TPS memberitahu ECU posisi throttle.'); else if(obj===ecu) showHint('ECU','Engine Control Unit — otak sistem EFI: mengolah sinyal sensor & mengendalikan injector, pompa, dan pengapian.'); else if(obj===sparkMesh) showHint('Spark Plug','Busi menghasilkan percikan untuk membakar campuran udara-bahan bakar pada waktu (timing) yang benar.'); else if(obj===tank) showHint('Fuel Tank','Tempat penyimpanan bahan bakar.'); else if(obj===airFilter) showHint('Air Filter','Menyaring udara masuk.'); else if(obj===rail) showHint('Fuel Rail','Mendistribusikan bahan bakar bertekanan ke injector.'); }
+
+        function showHint(title,text){ document.getElementById('hintBox').innerHTML = `<strong>${title}</strong><div style="margin-top:6px;font-size:13px;color:#cfe9ff">${text}</div>`; log(`${title}: ${text}`); }
+
+        // logging helper
+        function log(txt){ const el=document.getElementById('log'); const time=new Date().toLocaleTimeString(); el.innerHTML = `<div>[${time}] ${txt}</div>` + el.innerHTML; }
+
+        // Simulation state & functions
+        const state = {running:false, time:0, pumpOn:false, rpm:0, afr:14.7};
+        const tpsEl=document.getElementById('tps'); const mafEl=document.getElementById('maf'); const ectEl=document.getElementById('ect'); const o2El=document.getElementById('o2toggle');
+        function updateReadouts(){ document.getElementById('tpsVal').textContent = `${tpsEl.value}°`; document.getElementById('mafVal').textContent = mafEl.value; document.getElementById('ectVal').textContent = `${ectEl.value}°C`; }
+        tpsEl.addEventListener('input', ()=>{ updateReadouts(); log(`TPS diubah: ${tpsEl.value}°`); }); mafEl.addEventListener('input', ()=>{ updateReadouts(); log(`MAF (airflow) diubah: ${mafEl.value}`); }); ectEl.addEventListener('input', ()=>{ updateReadouts(); log(`ECT (suhu) diubah: ${ectEl.value}°C`); }); o2El.addEventListener('change', ()=>{ log(`O2 Sensor ${o2El.checked? 'Aktif (Closed-loop)' : 'Nonaktif (Open-loop)'} `); }); updateReadouts();
+
+        // injector manual buttons
+        document.getElementById('inj1').addEventListener('click', ()=>{ flashInjector(0); log('Manual: Injector 1 dipicu'); }); document.getElementById('inj2').addEventListener('click', ()=>{ flashInjector(1); log('Manual: Injector 2 dipicu'); }); document.getElementById('inj3').addEventListener('click', ()=>{ flashInjector(2); log('Manual: Injector 3 dipicu'); });
+        function flashInjector(i){ const inj=injectors[i]; inj.scale.y = 1.8; setTimeout(()=>inj.scale.y=1,180); }
+
+        // engine control: start/stop
+        document.getElementById('btnStart').addEventListener('click', ()=>{ if(state.running) return; log('Start command received'); startEngine(); });
+        document.getElementById('btnStop').addEventListener('click', ()=>{ if(!state.running) return; log('Stop command received'); stopEngine(); });
+        document.getElementById('btnReset').addEventListener('click', ()=>{ resetAll(); });
+        document.getElementById('btnStep').addEventListener('click', ()=>{ stepOnce(); });
+
+        function startEngine(){ state.running = true; state.time = 0; state.pumpOn = true; setPump(true); setStatus('Key On — Priming'); // then crank
+          setTimeout(()=>{ setStatus('Crank — Starting'); crankSequence(); }, 900);
+        }
+        function stopEngine(){ state.running=false; state.pumpOn=false; setPump(false); setStatus('OFF'); stopRun(); }
+        function resetAll(){ stopEngine(); document.getElementById('log').innerHTML=''; document.getElementById('captionOverlay').textContent='Caption: Siap'; document.getElementById('statusText').textContent='OFF'; }
+
+        function setStatus(s){ document.getElementById('statusText').textContent = s; document.getElementById('captionOverlay').textContent = s; }
+        function setPump(on){ pump.userData.on = on; if(on) log('Pompa: ON (priming)'); else log('Pompa: OFF'); }
+
+        function crankSequence(){ // simulate cranking enrichment then running
+          let attempts=0; const cInt=setInterval(()=>{ attempts++; triggerInjectors(); triggerSpark(); if(attempts>8){ clearInterval(cInt); // go to run
+              setStatus('Run — Mesin Hidup (Closed-loop)'); state.running=true; startRun(); } }, 320); }
+
+        function triggerInjectors(){ injectors.forEach((inj,i)=>{ inj.scale.y=1.6; setTimeout(()=>inj.scale.y=1,160); }); log('Injector pulses (ECU)'); }
+        function triggerSpark(){ sparkMat.emissiveIntensity = 4; setTimeout(()=>sparkMat.emissiveIntensity = 0,120); log('Spark fired'); }
+
+        let runInterval=null;
+        function startRun(){ if(runInterval) clearInterval(runInterval); updateAFR(); runInterval = setInterval(()=>{ // main loop: pulse injectors according to airflow & TPS
+            computeAFR(); triggerInjectors(); triggerSpark(); state.time += 420; updateAFR(); }, 420); }
+        function stopRun(){ if(runInterval){ clearInterval(runInterval); runInterval=null; } }
+
+        // simple AFR model: AFR = (airflow factor) / (fuel factor). We'll simulate
+        function computeAFR(){ const air = Number(mafEl.value); const tps = Number(tpsEl.value); const tempFactor = 1 - (Number(ectEl.value)-20)/300; // warmer => denser? simplified
+          // fuel base depends on TPS and injectors count
+          const fuelBase = (tps*0.02 + 0.8) * (injectors.length/3); // arb
+          // AFR target open-loop ~14.7; adjust by fuelBase/air
+          const afr = Math.max(10, Math.min(20, (air / fuelBase) * 0.12)); state.afr = Math.round(afr*10)/10; document.getElementById('afrVal').textContent = `AFR ~ ${state.afr}`; document.getElementById('captionOverlay').textContent = `AFR: ${state.afr} | TPS:${tps}° | MAF:${air}`; }
+        function updateAFR(){ if(o2El.checked){ // closed loop tries to move towards 14.7
+            const diff = 14.7 - state.afr; state.afr += diff*0.25; state.afr = Math.round(state.afr*10)/10; document.getElementById('afrVal').textContent = `AFR ~ ${state.afr}`; }
+          else { computeAFR(); } }
+
+        // step once through timeline small events
+        let stepIdx=0; function stepOnce(){ const evs=[()=>{ setPump(true); setStatus('Key On — Priming'); }, ()=>{ setStatus('Crank — Enrichment'); triggerInjectors(); triggerSpark(); }, ()=>{ setStatus('Run — Mesin Hidup'); startRun(); }, ()=>{ setStatus('Shutdown'); stopRun(); setPump(false); setStatus('OFF'); }]; if(stepIdx<evs.length){ evs[stepIdx](); stepIdx++; } else { stepIdx=0; } }
+
+        // download & snapshot
+        document.getElementById('downloadHtml').addEventListener('click', ()=>{ const blob = new Blob([document.documentElement.outerHTML], {type:'text/html'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='simulasi_efi_avanza_interaktif.html'; a.click(); URL.revokeObjectURL(url); });
+        document.getElementById('exportSnapshot').addEventListener('click', ()=>{ renderer.render(scene,camera); const url=renderer.domElement.toDataURL('image/png'); const a=document.createElement('a'); a.href=url; a.download='efi_snapshot.png'; a.click(); });
+
+        // pump rotation and simple visuals
+        function animate(){ requestAnimationFrame(animate); if(pump.userData.on){ pumpRotor.rotation.z -= 0.18; pumpBody.rotation.z -= 0.06; } controls.update(); renderer.render(scene,camera); }
+
+        // camera fit
+        const bbox = new THREE.Box3().setFromObject(group); const center = bbox.getCenter(new THREE.Vector3()); controls.target.copy(center); camera.lookAt(center);
+        window.addEventListener('resize', ()=>{ renderer.setSize(view.clientWidth, view.clientHeight); camera.aspect = view.clientWidth/view.clientHeight; camera.updateProjectionMatrix(); });
+
+        // start
+        animate(); log('Simulasi dimuat — klik Start untuk menjalankan.'); setStatus('OFF');
+      }
+    })();
+  </script>
+</body>
+</html>
