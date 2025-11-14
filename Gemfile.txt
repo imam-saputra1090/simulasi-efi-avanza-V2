@@ -1,0 +1,16 @@
+source "https://rubygems.org"
+
+# Optionally pin a Ruby version that your deployment environment uses, e.g.:
+# ruby "3.1.2"
+
+gem "jekyll", "~> 4.3"
+
+group :jekyll_plugins do
+  gem "jekyll-seo-tag"
+  gem "jekyll-sitemap"
+  gem "jekyll-feed"
+  gem "jekyll-minifier"
+  gem "jekyll-assets"
+  # Use the maintained paginate plugin
+  gem "jekyll-paginate-v2"
+end
